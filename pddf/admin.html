@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>لوحة التحقق من الدفعات</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef3f0;--ink:#10231f;--card:#fff;--line:#cfdcd6;--acc:#0f6b4f;--bad:#b3392b;--mut:#55655f}
+@media(prefers-color-scheme:dark){:root{--bg:#0d1714;--ink:#e6f0ec;--card:#15241f;--line:#2a3d36;--acc:#3fbf93;--bad:#e5766a;--mut:#9bb0a8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.6 Tajawal,Tahoma,sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+main{max-width:760px;margin:0 auto;padding:16px}
+h1{font-weight:800;font-size:24px;margin:8px 0 12px}
+input,button{font:inherit}
+input{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);margin:4px 0 12px}
+button{border:0;border-radius:10px;padding:10px 16px;font-weight:800;cursor:pointer;background:var(--acc);color:#fff}
+button.no{background:var(--bad)}
+button.tab{background:none;color:var(--ink);border:1px solid var(--line)}
+button.tab[aria-pressed=true]{background:var(--acc);color:#fff;border-color:var(--acc)}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.row{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin:10px 0}
+.row b{font-size:18px}
+.meta{color:var(--mut);font-size:15px}
+.ltr{direction:ltr;unicode-bidi:embed}
+.act{display:flex;gap:8px;margin-top:10px}
+.hide{display:none}
+.err{color:var(--bad)}
+:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+</style>
+</head>
+<body>
+<main>
+<h1>التحقق من الدفعات</h1>
+
+<form id="login" onsubmit="return false">
+  <label>البريد الإلكتروني<input id="em" type="email" dir="ltr" autocomplete="username"></label>
+  <label>كلمة المرور<input id="pw" type="password" dir="ltr" autocomplete="current-password"></label>
+  <p class="err" id="lerr"></p>
+  <button id="in">دخول</button>
+</form>
+
+<div id="app" class="hide">
+  <div class="bar">
+    <button class="tab" data-s="pending">قيد الانتظار</button>
+    <button class="tab" data-s="approved">مقبولة</button>
+    <button class="tab" data-s="rejected">مرفوضة</button>
+    <button class="tab" id="refresh">تحديث</button>
+  </div>
+  <div id="list"></div>
+</div>
+</main>
+
+<script>
+/* ===== EDIT THESE (same values as index.html) ===== */
+const SUPABASE_URL = "https://YOUR-PROJECT.supabase.co";
+const SUPABASE_KEY = "YOUR-ANON-KEY";
+/* ================================================== */
+
+const $ = id => document.getElementById(id);
+let token = "", filter = "pending";
+const H = () => ({apikey:SUPABASE_KEY, Authorization:"Bearer "+token, "Content-Type":"application/json"});
+
+$("in").onclick = async () => {
+  $("lerr").textContent = "";
+  try{
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`,{
+      method:"POST", headers:{apikey:SUPABASE_KEY,"Content-Type":"application/json"},
+      body:JSON.stringify({email:$("em").value.trim(),password:$("pw").value})});
+    const j = await r.json();
+    if(!r.ok) throw 0;
+    token = j.access_token; $("login").classList.add("hide"); $("app").classList.remove("hide"); load();
+  }catch(e){ $("lerr").textContent = "بيانات الدخول غير صحيحة."; }
+};
+
+document.querySelectorAll(".tab[data-s]").forEach(b => b.onclick = () => {filter=b.dataset.s; load()});
+$("refresh").onclick = () => load();
+
+async function load(){
+  document.querySelectorAll(".tab[data-s]").forEach(b=>b.setAttribute("aria-pressed", b.dataset.s===filter));
+  const list = $("list"); list.textContent = "جارٍ التحميل...";
+  try{
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/payments?status=eq.${filter}&order=created_at.desc&limit=100`,{headers:H()});
+    if(!r.ok) throw 0;
+    const rows = await r.json();
+    list.textContent = rows.length ? "" : "لا توجد طلبات.";
+    rows.forEach(p => list.appendChild(card(p)));
+  }catch(e){ list.textContent = "تعذر التحميل. سجّل الدخول من جديد."; }
+}
+
+function el(tag, cls, text){const e=document.createElement(tag); if(cls)e.className=cls; if(text!=null)e.textContent=text; return e}
+
+function card(p){
+  const d = el("div","row");
+  d.appendChild(el("b",null,p.name));
+  d.appendChild(el("div","meta ltr",p.phone));
+  d.appendChild(el("div",null,"الطريقة: "+p.method));
+  d.appendChild(el("div","ltr","رقم العملية: "+p.ref));
+  d.appendChild(el("div","meta",new Date(p.created_at).toLocaleString("ar")));
+  if(p.status==="pending"){
+    const a = el("div","act");
+    const ok = el("button",null,"قبول"), no = el("button","no","رفض");
+    ok.onclick = () => setStatus(p.id,"approved");
+    no.onclick = () => setStatus(p.id,"rejected");
+    a.append(ok,no); d.appendChild(a);
+  }
+  return d;
+}
+
+async function setStatus(id,status){
+  await fetch(`${SUPABASE_URL}/rest/v1/payments?id=eq.${id}`,{method:"PATCH",headers:H(),body:JSON.stringify({status})});
+  load();
+}
+</script>
+</body>
+</html>

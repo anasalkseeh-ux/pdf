@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>أداة الصور إلى PDF</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef3f0;--ink:#10231f;--card:#fff;--line:#cfdcd6;--acc:#0f6b4f;--gold:#b07d12;--mut:#55655f}
+@media(prefers-color-scheme:dark){:root{--bg:#0d1714;--ink:#e6f0ec;--card:#15241f;--line:#2a3d36;--acc:#3fbf93;--gold:#e0b04a;--mut:#9bb0a8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 17px/1.7 Tajawal,Tahoma,sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+main{max-width:520px;margin:0 auto;padding:20px 16px 48px}
+h1{font-weight:800;font-size:28px;margin:12px 0 4px}
+h2{font-weight:800;font-size:21px;margin:0 0 8px}
+p{margin:0 0 12px;color:var(--mut)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin:14px 0}
+.price{font-weight:800;font-size:40px;color:var(--gold);line-height:1.1}
+button,.btn{font:inherit;font-weight:800;background:var(--acc);color:#fff;border:0;border-radius:10px;padding:12px 18px;width:100%;cursor:pointer;display:block;text-align:center;text-decoration:none}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.alt{background:none;color:var(--acc);border:1px solid var(--acc)}
+input[type=text],input[type=tel]{font:inherit;width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);margin:4px 0 12px}
+label{font-weight:500}
+.terms{max-height:150px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:15px;color:var(--mut);margin-bottom:12px}
+.m{display:block;border:2px solid var(--line);border-radius:12px;padding:12px;margin:8px 0;cursor:pointer}
+.m:has(input:checked){border-color:var(--acc)}
+.m b{display:block}.m span{direction:ltr;unicode-bidi:embed;font-weight:800;color:var(--acc);font-size:19px}
+:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.err{color:#c0392b;font-weight:500}
+.hide{display:none}
+</style>
+</head>
+<body>
+<main>
+<h1>صور إلى PDF</h1>
+<p>حوّل صورك إلى ملف PDF بدون رفعها لأي سيرفر.</p>
+
+<!-- Step 1: terms -->
+<section id="s1" class="hide">
+  <div class="card">
+    <h2>الاشتراك</h2>
+    <div class="price" id="price"></div>
+    <p>دفعة واحدة للوصول إلى الأداة.</p>
+    <div class="terms" id="terms"><!-- TERMS: replace with your real text -->
+      <b>الشروط وسياسة الخصوصية</b><br>
+      باستخدامك للخدمة توافق على أن الدفعة غير قابلة للاسترداد بعد تفعيل الحساب. نحتفظ باسمك ورقم هاتفك ومرجع الدفع فقط للتحقق من الدفعة وللتواصل معك، ولا نشاركها مع أحد. الصور التي تحوّلها تبقى على جهازك ولا تُرفع إلينا.
+    </div>
+    <label><input type="checkbox" id="agree"> أوافق على الشروط وسياسة الخصوصية</label><br><br>
+    <button id="go1" disabled>متابعة إلى الدفع</button>
+  </div>
+</section>
+
+<!-- Step 2: payment -->
+<section id="s2" class="hide">
+  <div class="card">
+    <h2>اختر طريقة الدفع</h2>
+    <p>حوّل المبلغ <b id="price2"></b> إلى الحساب، ثم أدخل بيانات الحوالة.</p>
+    <div id="methods"></div>
+    <label>الاسم<input type="text" id="name" autocomplete="name"></label>
+    <label>رقم هاتفك<input type="tel" id="phone" dir="ltr" autocomplete="tel"></label>
+    <label>رقم العملية أو الفاتورة<input type="text" id="ref" dir="ltr"></label>
+    <p class="err" id="err"></p>
+    <button id="send">أرسل الدفعة للتحقق</button>
+  </div>
+</section>
+
+<!-- Step 3: waiting -->
+<section id="s3" class="hide">
+  <div class="card">
+    <h2>جارٍ التحقق من دفعتك</h2>
+    <p id="wait">نراجع الحوالة يدويًا، وقد يستغرق ذلك بعض الوقت. يمكنك ترك هذه الصفحة مفتوحة وستفتح الأداة تلقائيًا عند القبول.</p>
+    <button class="alt" id="recheck">تحقق الآن</button>
+  </div>
+</section>
+
+<!-- Step 4: tool -->
+<section id="s4" class="hide">
+  <div class="card">
+    <h2>حوّل صورك إلى PDF</h2>
+    <p>اختر صورة أو أكثر. تُرتَّب الصفحات كما اخترتها.</p>
+    <input type="file" id="files" accept="image/*" multiple>
+    <p id="count"></p>
+    <button id="make" disabled>إنشاء PDF</button>
+  </div>
+</section>
+</main>
+
+<script>
+/* ===== EDIT THESE ===== */
+const SUPABASE_URL = "https://YOUR-PROJECT.supabase.co";
+const SUPABASE_KEY = "YOUR-ANON-KEY";
+const PRICE = 5500;
+const METHODS = [
+  {id:"sham",  name:"شام كاش",     account:"0000000000"},
+  {id:"syr",   name:"سيريتيل كاش", account:"0000000000"},
+  // add more here: {id:"x", name:"...", account:"..."},
+];
+/* ====================== */
+
+const $ = id => document.getElementById(id);
+const show = n => ["s1","s2","s3","s4"].forEach((s,i)=>$(s).classList.toggle("hide", i+1!==n));
+const store = {
+  get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},
+  set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}
+};
+const rpc = (fn,body)=>fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`,{
+  method:"POST",
+  headers:{apikey:SUPABASE_KEY,Authorization:"Bearer "+SUPABASE_KEY,"Content-Type":"application/json"},
+  body:JSON.stringify(body)}).then(r=>{if(!r.ok)throw new Error(r.status);return r.json()});
+
+const priceTxt = PRICE.toLocaleString("en-US")+" ل.س";
+$("price").textContent = priceTxt; $("price2").textContent = priceTxt;
+
+$("methods").innerHTML = METHODS.map((m,i)=>
+  `<label class="m"><input type="radio" name="m" value="${m.name}" ${i?"":"checked"}> <b>${m.name}</b><span>${m.account}</span></label>`).join("");
+
+$("agree").onchange = e => $("go1").disabled = !e.target.checked;
+$("go1").onclick = () => show(2);
+
+$("send").onclick = async () => {
+  const name=$("name").value.trim(), phone=$("phone").value.trim(), ref=$("ref").value.trim();
+  const method=document.querySelector("input[name=m]:checked").value;
+  if(!name||!phone||!ref){$("err").textContent="أكمل جميع الحقول.";return}
+  $("err").textContent=""; $("send").disabled=true;
+  try{
+    const id = await rpc("submit_payment",{p_name:name,p_phone:phone,p_method:method,p_ref:ref});
+    store.set("pid",id); show(3); poll();
+  }catch(e){
+    $("err").textContent="تعذر الإرسال. تحقق من الاتصال وحاول مجددًا.";
+  }
+  $("send").disabled=false;
+};
+
+let timer;
+async function check(){
+  const pid=store.get("pid"); if(!pid) return false;
+  try{
+    const st = await rpc("check_payment",{pid});
+    if(st==="approved"){clearInterval(timer);show(4);return true}
+    if(st==="rejected"){clearInterval(timer);store.set("pid","");$("wait").textContent="لم نتمكن من تأكيد الدفعة. تحقق من رقم العملية وأعد المحاولة.";$("recheck").textContent="العودة للدفع";$("recheck").onclick=()=>location.reload()}
+  }catch(e){}
+  return false;
+}
+function poll(){clearInterval(timer);timer=setInterval(check,10000)}
+$("recheck").onclick = check;
+
+/* ---- tool: images to PDF (no libraries) ---- */
+let picked=[];
+$("files").onchange = e => {picked=[...e.target.files];$("count").textContent=picked.length?`تم اختيار ${picked.length} صورة`:"";$("make").disabled=!picked.length};
+
+function loadImg(f){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=URL.createObjectURL(f)})}
+async function toJpeg(f){
+  const img=await loadImg(f), k=Math.min(1,1600/img.width);
+  const c=document.createElement("canvas"); c.width=Math.round(img.width*k); c.height=Math.round(img.height*k);
+  const x=c.getContext("2d"); x.fillStyle="#fff"; x.fillRect(0,0,c.width,c.height); x.drawImage(img,0,0,c.width,c.height);
+  const b=await new Promise(r=>c.toBlob(r,"image/jpeg",.85));
+  return {pw:c.width,ph:c.height,jpg:new Uint8Array(await b.arrayBuffer())};
+}
+function makePDF(pages){
+  const enc=new TextEncoder(),chunks=[],offs=[];let len=0;
+  const add=d=>{if(typeof d==="string")d=enc.encode(d);chunks.push(d);len+=d.length};
+  const obj=(n,fn)=>{offs[n]=len;add(n+" 0 obj\n");fn();add("\nendobj\n")};
+  const n=pages.length;
+  add("%PDF-1.4\n");
+  obj(1,()=>add("<</Type/Catalog/Pages 2 0 R>>"));
+  obj(2,()=>add(`<</Type/Pages/Count ${n}/Kids[${pages.map((_,i)=>(3+3*i)+" 0 R").join(" ")}]>>`));
+  pages.forEach((p,i)=>{
+    const a=3+3*i,w=595,h=Math.round(595*p.ph/p.pw),c=`q ${w} 0 0 ${h} 0 0 cm /I Do Q`;
+    obj(a,()=>add(`<</Type/Page/Parent 2 0 R/MediaBox[0 0 ${w} ${h}]/Resources<</XObject<</I ${a+2} 0 R>>>>/Contents ${a+1} 0 R>>`));
+    obj(a+1,()=>add(`<</Length ${c.length}>>\nstream\n${c}\nendstream`));
+    obj(a+2,()=>{add(`<</Type/XObject/Subtype/Image/Width ${p.pw}/Height ${p.ph}/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter/DCTDecode/Length ${p.jpg.length}>>\nstream\n`);add(p.jpg);add("\nendstream")});
+  });
+  const total=3+3*n,x=len;
+  add(`xref\n0 ${total}\n0000000000 65535 f \n`+offs.slice(1).map(o=>String(o).padStart(10,"0")+" 00000 n \n").join(""));
+  add(`trailer\n<</Size ${total}/Root 1 0 R>>\nstartxref\n${x}\n%%EOF`);
+  return new Blob(chunks,{type:"application/pdf"});
+}
+$("make").onclick = async () => {
+  $("make").disabled=true; $("make").textContent="جارٍ الإنشاء...";
+  try{
+    const pages=[]; for(const f of picked) pages.push(await toJpeg(f));
+    const a=document.createElement("a"); a.href=URL.createObjectURL(makePDF(pages)); a.download="images.pdf"; a.click();
+  }catch(e){alert("تعذر إنشاء الملف. جرّب صورًا أخرى.")}
+  $("make").textContent="إنشاء PDF"; $("make").disabled=false;
+};
+
+/* ---- start ---- */
+(async()=>{
+  if(store.get("pid")){show(3);if(!(await check()))poll()} else show(1);
+})();
+</script>
+</body>
+</html>
